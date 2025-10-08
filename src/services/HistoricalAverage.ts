@@ -1,20 +1,47 @@
-// src/services/HistoricalAverage.ts
 import fetch from 'node-fetch';
 
+// --- Config ---
 const OPENWEATHER_API_KEY = '9937e69d524ede9dc35a077528e4e15d';
 const METEOSTAT_API_KEY = '8d2fdfb836msh07acb12a0b5262bp12b12ajsnf1239ae9534b';
 
+// --- Tipos auxiliares ---
+interface GeoResponse {
+  lat: number;
+  lon: number;
+}
+
+interface MeteostatDaily {
+  tmin: number;
+  tmax: number;
+}
+
+interface MeteostatResponse {
+  data?: MeteostatDaily[];
+}
+
+interface HistoricalAverageResult {
+  temp_min_avg: number | null;
+  temp_max_avg: number | null;
+  temp_avg: number | null;
+  status: "ok" | "no_data";
+}
+
 // --- Cache simples ---
-const historicalCache: Record<string, { tmin: number; tmax: number }[]> = {};
+const historicalCache: Record<string, MeteostatDaily[]> = {};
 
 // --- Função para obter coordenadas da cidade ---
-async function getCityCoordinates(city: string, country: string): Promise<{ lat: number; lon: number } | null> {
-  const geoUrl = `http://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(city)},${encodeURIComponent(country)}&limit=1&appid=${OPENWEATHER_API_KEY}`;
+async function getCityCoordinates(city: string, country: string): Promise<GeoResponse | null> {
+  const geoUrl = `http://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(
+    city
+  )},${encodeURIComponent(country)}&limit=1&appid=${OPENWEATHER_API_KEY}`;
+
   try {
     const geoRes = await fetch(geoUrl);
     if (!geoRes.ok) throw new Error(`Erro na geolocalização: ${geoRes.status}`);
-    const geoData = await geoRes.json();
+
+    const geoData = (await geoRes.json()) as Array<{ lat: number; lon: number }>;
     if (!geoData[0]) return null;
+
     return { lat: geoData[0].lat, lon: geoData[0].lon };
   } catch (err) {
     console.error(err);
@@ -26,10 +53,12 @@ async function getCityCoordinates(city: string, country: string): Promise<{ lat:
 function getDatesBetween(startDate: Date, endDate: Date): Date[] {
   const dates: Date[] = [];
   let current = new Date(startDate);
+
   while (current <= endDate) {
     dates.push(new Date(current));
     current.setDate(current.getDate() + 1);
   }
+
   return dates;
 }
 
@@ -38,30 +67,36 @@ async function getHistoricalAverageForDay(lat: number, lon: number, month: numbe
   const cacheKey = `${lat}_${lon}_${month}_${day}`;
   if (historicalCache[cacheKey]) {
     const temps = historicalCache[cacheKey];
-    const avgMin = temps.reduce((a,b)=>a+b.tmin,0)/temps.length;
-    const avgMax = temps.reduce((a,b)=>a+b.tmax,0)/temps.length;
-    return { temp_min_avg: avgMin, temp_max_avg: avgMax, temp_avg: (avgMin+avgMax)/2 };
+    const avgMin = temps.reduce((a, b) => a + b.tmin, 0) / temps.length;
+    const avgMax = temps.reduce((a, b) => a + b.tmax, 0) / temps.length;
+    return { temp_min_avg: avgMin, temp_max_avg: avgMax, temp_avg: (avgMin + avgMax) / 2 };
   }
 
   const startYear = 2023;
   const endYear = 2025;
-  const temps: { tmin: number; tmax: number }[] = [];
+  const temps: MeteostatDaily[] = [];
 
-  for (let year=startYear; year<=endYear; year++) {
-    const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  for (let year = startYear; year <= endYear; year++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const url = `https://meteostat.p.rapidapi.com/point/daily?lat=${lat}&lon=${lon}&start=${dateStr}&end=${dateStr}&units=metric`;
+
     try {
       const res = await fetch(url, {
         method: 'GET',
         headers: {
           'x-rapidapi-host': 'meteostat.p.rapidapi.com',
           'x-rapidapi-key': METEOSTAT_API_KEY,
-        }
+        },
       });
       if (!res.ok) continue;
-      const data = await res.json();
+
+      const data = (await res.json()) as MeteostatResponse;
+
       if (data.data && data.data.length > 0) {
-        temps.push({ tmin: data.data[0].tmin, tmax: data.data[0].tmax });
+        const { tmin, tmax } = data.data[0];
+        if (typeof tmin === 'number' && typeof tmax === 'number') {
+          temps.push({ tmin, tmax });
+        }
       }
     } catch (err) {
       console.error(`Erro na API Meteostat para ${dateStr}:`, err);
@@ -74,13 +109,18 @@ async function getHistoricalAverageForDay(lat: number, lon: number, month: numbe
   // Salva no cache
   historicalCache[cacheKey] = temps;
 
-  const avgMin = temps.reduce((a,b)=>a+b.tmin,0)/temps.length;
-  const avgMax = temps.reduce((a,b)=>a+b.tmax,0)/temps.length;
-  return { temp_min_avg: avgMin, temp_max_avg: avgMax, temp_avg: (avgMin+avgMax)/2 };
+  const avgMin = temps.reduce((a, b) => a + b.tmin, 0) / temps.length;
+  const avgMax = temps.reduce((a, b) => a + b.tmax, 0) / temps.length;
+  return { temp_min_avg: avgMin, temp_max_avg: avgMax, temp_avg: (avgMin + avgMax) / 2 };
 }
 
 // --- Função principal para intervalo da viagem ---
-export async function getHistoricalAverageForInterval(city: string, country: string, startDateStr: string, endDateStr: string) {
+export async function getHistoricalAverageForInterval(
+  city: string,
+  country: string,
+  startDateStr: string,
+  endDateStr: string
+) {
   const coords = await getCityCoordinates(city, country);
   if (!coords) return null;
 
@@ -89,58 +129,52 @@ export async function getHistoricalAverageForInterval(city: string, country: str
   const dates = getDatesBetween(startDate, endDate);
 
   const MAX_CONCURRENT = 5;
-  const results: { temp_min_avg: number | null; temp_max_avg: number | null; temp_avg: number | null; status: "ok" | "no_data" }[] = [];
+  const results: HistoricalAverageResult[] = [];
 
-  for (let i=0; i<dates.length; i+=MAX_CONCURRENT) {
-    const batch = dates.slice(i, i+MAX_CONCURRENT);
-    const batchResults = await Promise.all(batch.map(async date => {
-      const day = date.getDate();
-      const month = date.getMonth()+1;
-      const avg = await getHistoricalAverageForDay(coords.lat, coords.lon, month, day);
-      const status: "ok" | "no_data" = avg ? "ok" : "no_data";
-      return {
-        temp_min_avg: avg?.temp_min_avg ?? null,
-        temp_max_avg: avg?.temp_max_avg ?? null,
-        temp_avg: avg?.temp_avg ?? null,
-        status
-      };
-    }));
+  for (let i = 0; i < dates.length; i += MAX_CONCURRENT) {
+    const batch = dates.slice(i, i + MAX_CONCURRENT);
+
+    const batchResults = await Promise.all(
+      batch.map(async (date) => {
+        const day = date.getDate();
+        const month = date.getMonth() + 1;
+        const avg = await getHistoricalAverageForDay(coords.lat, coords.lon, month, day);
+        const status: "ok" | "no_data" = avg ? "ok" : "no_data";
+
+        return {
+          temp_min_avg: avg?.temp_min_avg ?? null,
+          temp_max_avg: avg?.temp_max_avg ?? null,
+          temp_avg: avg?.temp_avg ?? null,
+          status,
+        };
+      })
+    );
+
     results.push(...batchResults);
   }
 
-  const validDays = results.filter(r => r.status === 'ok');
+  const validDays = results.filter((r) => r.status === "ok");
   if (validDays.length === 0) return null;
 
-  const tempMinAvg = validDays.reduce((sum, d) => sum + d.temp_min_avg!, 0) / validDays.length;
-  const tempMaxAvg = validDays.reduce((sum, d) => sum + d.temp_max_avg!, 0) / validDays.length;
-  const tempAvg = validDays.reduce((sum, d) => sum + d.temp_avg!, 0) / validDays.length;
+  const tempMinAvg =
+    validDays.reduce((sum, d) => sum + (d.temp_min_avg ?? 0), 0) / validDays.length;
+  const tempMaxAvg =
+    validDays.reduce((sum, d) => sum + (d.temp_max_avg ?? 0), 0) / validDays.length;
+  const tempAvg = validDays.reduce((sum, d) => sum + (d.temp_avg ?? 0), 0) / validDays.length;
 
-  // Retorna média geral e aviso sobre confiabilidade
   return {
-   // temp_min_avg: tempMinAvg,
-   // temp_max_avg: tempMaxAvg,
     temp_avg: tempAvg,
-   // days_with_data: validDays.length,
-   // total_days: results.length,
-   // reliable: validDays.length / results.length >= 0.5 // confiável se pelo menos metade dos dias tem dados
   };
 }
 
 // --- Exemplo de uso ---
 (async () => {
   console.log("Calculando média histórica geral do intervalo...");
-  const avg = await getHistoricalAverageForInterval("Gramado", "Brasil", "2026-04-01", "2026-04-21");
+  const avg = await getHistoricalAverageForInterval("Los Angeles", "Estados Unidos", "2026-01-15", "2026-05-25");
 
   if (!avg) {
     console.log("Nenhum dado histórico disponível para o intervalo.");
   } else {
-    console.log("Média geral da viagem:");
-   // console.log(`Temperatura mínima média: ${avg.temp_min_avg.toFixed(1)}°C`);
-   // console.log(`Temperatura máxima média: ${avg.temp_max_avg.toFixed(1)}°C`);
     console.log(`Temperatura média: ${avg.temp_avg.toFixed(1)}°C`);
-   // console.log(`Dias com dados: ${avg.days_with_data} de ${avg.total_days}`);
-   // if (!avg.reliable) {
-   //   console.log("Aviso: número de dias históricos insuficiente, a média pode não ser totalmente confiável.");
-   // }
   }
 })();
