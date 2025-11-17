@@ -8,6 +8,7 @@ const userRepository = new UserRepository();
 const tripRepository = new TripRepository();
 
 export class ItemController {
+
   async list(req: Request, res: Response) {
     try {
       const items = await itemRepository.findAllWithUser();
@@ -28,6 +29,17 @@ export class ItemController {
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: "Erro no servidor interno" });
+    }
+  }
+
+  async getByTrip(req: Request, res: Response) {
+    try {
+      const { tripId } = req.params;
+      const items = await itemRepository.findByTripId(Number(tripId));
+      return res.json(items);
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Internal server error" });
     }
   }
 
