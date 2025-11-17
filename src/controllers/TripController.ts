@@ -8,12 +8,12 @@ const tripRepository = new TripRepository();
 const userRepository = new UserRepository();
 
 export class TripController {
+  
   async list(req: Request, res: Response) {
     try {
       const trips = await tripRepository.findAllWithUser();
       return res.json(trips);
     } catch (error) {
-      console.error(error);
       return res.status(500).json({ message: "Internal server error" });
     }
   }
@@ -27,14 +27,27 @@ export class TripController {
 
       return res.json(trip);
     } catch (error) {
-      console.error(error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  }
+
+  async getByUser(req: Request, res: Response) {
+    try {
+      const { userId } = req.params;
+
+      const trips = await tripRepository.findByUserId(Number(userId));
+
+      return res.json(trips);
+    } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }
   }
 
   async create(req: Request, res: Response) {
     try {
-      const { name, city, country, startDate, endDate, automaticList } = req.body;
+      const { name, city, country, startDate, endDate, automaticList } =
+        req.body;
+
       const userId = req.user.id;
 
       if (!name || !city || !country || !startDate || !endDate) {
@@ -53,14 +66,25 @@ export class TripController {
         startDate,
         endDate,
         user,
-        automaticList: !!automaticList, 
+        automaticList: !!automaticList,
       });
 
       if (automaticList === true) {
-        const avg = await getHistoricalAverageForInterval(city, country, startDate, endDate);
+        const avg = await getHistoricalAverageForInterval(
+          city,
+          country,
+          startDate,
+          endDate
+        );
+
         const temperature = avg?.temp_avg ?? 20;
 
-        await ChecklistService.generateChecklist(temperature, true, trip, user);
+        await ChecklistService.generateChecklist(
+          temperature,
+          true,
+          trip,
+          user
+        );
       }
 
       return res.status(201).json({
@@ -68,7 +92,6 @@ export class TripController {
         trip,
       });
     } catch (error) {
-      console.error("Trip creation error:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   }
@@ -77,6 +100,7 @@ export class TripController {
     try {
       const { id } = req.params;
       const userId = req.user.id;
+
       const { name, city, country, startDate, endDate, isFavorite } = req.body;
 
       const trip = await tripRepository.findById(Number(id));
@@ -86,17 +110,16 @@ export class TripController {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      if (name) trip.name = name;
-      if (city) trip.city = city;
-      if (country) trip.country = country;
-      if (startDate) trip.startDate = startDate;
-      if (endDate) trip.endDate = endDate;
-      if (isFavorite) trip.isFavorite = isFavorite;
+      if (name !== undefined) trip.name = name;
+      if (city !== undefined) trip.city = city;
+      if (country !== undefined) trip.country = country;
+      if (startDate !== undefined) trip.startDate = startDate;
+      if (endDate !== undefined) trip.endDate = endDate;
+      if (isFavorite !== undefined) trip.isFavorite = isFavorite;
 
       const updatedTrip = await tripRepository.save(trip);
       return res.json(updatedTrip);
     } catch (error) {
-      console.error("Trip update error:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   }
@@ -116,7 +139,6 @@ export class TripController {
       await tripRepository.removeTrip(trip);
       return res.status(204).send();
     } catch (error) {
-      console.error("Trip deletion error:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   }
