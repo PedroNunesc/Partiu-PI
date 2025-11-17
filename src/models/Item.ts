@@ -16,9 +16,6 @@ export class Item {
   @Column({ default: false })
   isPacked!: boolean;
 
-  @Column({ default: false })
-  isFavorite!: boolean;
-
   @ManyToOne(() => Trip, (trip) => trip.items, { onDelete: "CASCADE" })
   trip!: Trip;
 
@@ -30,6 +27,5 @@ export class Item {
     this.category = category;
     this.user = user;
     this.isPacked = false;
-    this.isFavorite = false;
   }
 }
