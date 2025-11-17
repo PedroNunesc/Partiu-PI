@@ -14,6 +14,4 @@ router.post('/users', auth.authenticateToken, controller.create); 'S'
 
 router.get('/users', controller.listAll); 'S'
 
-router.get('/users:id', controller.list);
-
 export default router;
