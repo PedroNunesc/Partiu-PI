@@ -16,4 +16,6 @@ router.put("/item/:id", auth.authenticateToken, (req, res) => itemController.upd
 
 router.delete("/item/:id", auth.authenticateToken, (req, res) => itemController.delete(req, res)); 'S'
 
+router.get("/item/trip/:tripId", auth.authenticateToken, (req, res) => itemController.getByTrip(req, res)); 'S'
+
 export default router;
