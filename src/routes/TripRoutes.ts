@@ -16,4 +16,6 @@ router.put("/trip/:id", auth.authenticateToken, (req, res) => tripController.upd
 
 router.delete("/trip/:id", auth.authenticateToken, (req, res) => tripController.delete(req, res)); 'S'
 
+router.get("/trip/user/:userId", auth.authenticateToken, (req, res) => tripController.getByUser(req, res)); 'S'
+
 export default router;
