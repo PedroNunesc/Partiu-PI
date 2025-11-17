@@ -27,6 +27,14 @@ export class TripRepository {
     return this.repository.findOneBy({ id });
   }
 
+  async findByUserId(userId: number) {
+  return this.repository.find({
+    where: { user: { id: userId } },
+    relations: ["user"],
+    order: { startDate: "ASC" }
+  });
+}
+
   async createAndSave(data: Partial<Trip>): Promise<Trip> {
     const trip = this.repository.create(data);
     return this.repository.save(trip);
