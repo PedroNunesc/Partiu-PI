@@ -29,10 +29,7 @@ export class Trip {
         default: "outro"
     })
     type!: string;
-
-    @Column({ default: false })
-    isFavorite!: boolean;
-
+    
     @Column()
     automaticList!: boolean;
 
